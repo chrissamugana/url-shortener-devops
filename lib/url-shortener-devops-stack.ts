@@ -18,7 +18,9 @@ export class UrlShortenerDevopsStack extends cdk.Stack {
     // Lambda Function for URL Shortening
     const shortenFn = new lambda.Function(this, 'ShortenFunction', {
       runtime: lambda.Runtime.NODEJS_18_X,
-      code: lambda.Code.fromAsset('lambda'),
+      code: lambda.Code.fromAsset('lambda', {
+        exclude: ['node_modules/**/*'],
+      }),
       handler: 'shorten.handler',
       environment: {
         TABLE_NAME: table.tableName,
@@ -28,7 +30,9 @@ export class UrlShortenerDevopsStack extends cdk.Stack {
     // Lambda Function for URL Redirection
     const redirectFn = new lambda.Function(this, 'RedirectFunction', {
       runtime: lambda.Runtime.NODEJS_18_X,
-      code: lambda.Code.fromAsset('lambda'),
+      code: lambda.Code.fromAsset('lambda', {
+        exclude: ['node_modules/**/*'],
+      }),
       handler: 'redirect.handler',
       environment: {
         TABLE_NAME: table.tableName,
