@@ -1,49 +1,75 @@
-import { APIGatewayProxyHandler } from 'aws-lambda';
-import { DynamoDB } from 'aws-sdk';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 
-const tableName = process.env.TABLE_NAME!;
-const db = new DynamoDB.DocumentClient();
+// Initialize DynamoDB client
+const ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+const docClient = DynamoDBDocumentClient.from(ddbClient);
 
-export const handler: APIGatewayProxyHandler = async (event) => {
+export const handler = async (event: any) => {
+  console.log('Event:', JSON.stringify(event, null, 2));
+  
   try {
+    // Get the short code from the path parameters
     const shortCode = event.pathParameters?.shortCode;
-
+    
     if (!shortCode) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ message: 'Missing short code' }),
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+        body: JSON.stringify({
+          error: 'Short code is required'
+        }),
       };
     }
-
-    const result = await db
-      .get({
-        TableName: tableName,
-        Key: { shortCode },
-      })
-      .promise();
-
-    const item = result.Item;
-
-    if (!item) {
+    
+    // Get the original URL from DynamoDB
+    const params = {
+      TableName: process.env.TABLE_NAME,
+      Key: {
+        shortCode: shortCode,
+      },
+    };
+    
+    const result = await docClient.send(new GetCommand(params));
+    
+    if (!result.Item) {
       return {
         statusCode: 404,
-        body: JSON.stringify({ message: 'Short URL not found' }),
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+        body: JSON.stringify({
+          error: 'Short code not found'
+        }),
       };
     }
-
+    
+    // Redirect to the original URL
     return {
       statusCode: 302,
       headers: {
-        Location: item.originalUrl,
+        'Location': result.Item.originalUrl,
+        'Access-Control-Allow-Origin': '*',
       },
       body: '',
     };
+    
   } catch (error) {
-    console.error('Redirect error:', error);
+    console.error('Error:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ message: 'Internal server error' }),
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
+      body: JSON.stringify({
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }),
     };
   }
 };
-

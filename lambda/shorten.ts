@@ -1,43 +1,70 @@
-import { APIGatewayProxyHandler } from 'aws-lambda';
-import { DynamoDB } from 'aws-sdk';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { v4 as uuidv4 } from 'uuid';
 
-const tableName = process.env.TABLE_NAME!;
-const db = new DynamoDB.DocumentClient();
+// Initialize DynamoDB client
+const ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+const docClient = DynamoDBDocumentClient.from(ddbClient);
 
-export const handler: APIGatewayProxyHandler = async (event) => {
+export const handler = async (event: any) => {
+  console.log('Event:', JSON.stringify(event, null, 2));
+  
   try {
-    const { nanoid } = await import('nanoid');
-    const body = JSON.parse(event.body || '{}');
-    const originalUrl = body.url;
-
-    if (!originalUrl) {
+    // Parse the request body
+    const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+    
+    if (!body || !body.url) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ message: 'URL is required' }),
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+        body: JSON.stringify({
+          error: 'URL is required'
+        }),
       };
     }
-
-    const shortCode = nanoid(6);
-
-    await db
-      .put({
-        TableName: tableName,
-        Item: { shortCode, originalUrl },
-      })
-      .promise();
-
+    
+    // Generate a short code
+    const shortCode = uuidv4().substring(0, 8);
+    
+    // Store in DynamoDB
+    const params = {
+      TableName: process.env.TABLE_NAME,
+      Item: {
+        shortCode: shortCode,
+        originalUrl: body.url,
+        createdAt: new Date().toISOString(),
+      },
+    };
+    
+    await docClient.send(new PutCommand(params));
+    
     return {
       statusCode: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
       body: JSON.stringify({
-        shortCode,
-        shortUrl: `https://${event.headers.Host}/${shortCode}`,
+        shortCode: shortCode,
+        originalUrl: body.url,
       }),
     };
+    
   } catch (error) {
-    console.error('Error shortening URL:', error);
+    console.error('Error:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ message: 'Internal server error' }),
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
+      body: JSON.stringify({
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }),
     };
   }
 };
