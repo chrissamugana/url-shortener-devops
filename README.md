@@ -82,5 +82,5 @@ Contributions and improvements are welcome! Please open an issue or submit a pul
 
 ## License
 
-MIT License © [Your Name or Company]
+MIT License © CSSolutions (Chris Samugana)
 
